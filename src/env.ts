@@ -5,8 +5,10 @@ const envSchema = z.object({
   HOST: z.string().default("localhost"),
   NODE_ENV: z.enum(["development", "production", "test"]).default("production"),
   CORS: z.string().default(""),
-  CLIENT_SECRET: z.string().default("10efac93bba8e282f1a2d0aa0b983fa32125a511"),
-  CLIENT_ID: z.string().default("Iv1.73549745fd0ce6e9"),
+  CLIENT_SECRET: z.string(),
+  CLIENT_ID: z.string(),
+  GITHUB_AUTH_LINK: z.string(),
+  GITHUB_TOKEN_LINK: z.string(),
 });
 
 export const env = envSchema.parse(process.env);
