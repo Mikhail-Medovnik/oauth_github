@@ -2,7 +2,7 @@ import axios from "axios";
 import { AxiosResponse } from "axios";
 import { env } from "../env";
 
-interface GithubTokenData {
+export interface GithubTokenData {
   access_token: string;
   expires_in: number;
   refresh_token: string;
