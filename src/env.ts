@@ -9,6 +9,7 @@ const envSchema = z.object({
   CLIENT_ID: z.string(),
   GITHUB_AUTH_LINK: z.string(),
   GITHUB_TOKEN_LINK: z.string(),
+  SQL_TABLE: z.string(),
 });
 
 export const env = envSchema.parse(process.env);

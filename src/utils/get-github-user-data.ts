@@ -1,10 +1,16 @@
 import axios, { AxiosResponse } from "axios";
 
+export interface GithubUser {
+  id: number;
+  login: string;
+  url: string;
+}
+
 export async function getGithubUserData(
   userToken: string
-): Promise<unknown | null> {
+): Promise<GithubUser | null> {
   try {
-    const response: AxiosResponse<unknown> = await axios.get(
+    const response: AxiosResponse<GithubUser> = await axios.get(
       "https://api.github.com/user",
       {
         headers: {
@@ -14,7 +20,8 @@ export async function getGithubUserData(
         },
       }
     );
-    return response;
+
+    return response.data;
   } catch (error) {
     console.error(error);
     return null;

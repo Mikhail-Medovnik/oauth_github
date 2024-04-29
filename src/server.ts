@@ -3,19 +3,27 @@ import fastifyHtml from "fastify-html";
 import cors from "@fastify/cors";
 import formBody from "@fastify/formbody";
 import helmet from "@fastify/helmet";
+import { fastifyCookie } from "@fastify/cookie";
+import fastifySession from "@fastify/session";
+import { fastifyPostgresJs } from "fastify-postgres-dot-js";
+import randomstring from "randomstring";
 import { getLogger } from "./logger.js";
 import { env } from "./env.js";
-import { fastifyCookie } from "@fastify/cookie";
-import randomstring from "randomstring";
-import fastifySession from "@fastify/session";
-import { calculateTtl, getGithubToken } from "./utils";
-import { GithubTokenData } from "./utils/get-github-token.js";
-import { getGithubUserData } from "./utils";
+import {
+  getGithubUserData,
+  getGithubToken,
+  calculatePeriod,
+  checkUserInDb,
+  type GithubTokenData,
+  type GithubUser,
+} from "./utils";
+import { databaseConfig } from "./database/database-config.js";
 
 interface SessionData {
   authenticated?: boolean;
-  lastLoginTime?: number;
   githubToken?: GithubTokenData | null;
+  lastLoginTime?: number;
+  userData?: GithubUser | null;
 }
 
 const server = fastify({
@@ -31,8 +39,12 @@ server.register(fastifySession, {
     charset: "alphabetic",
     readable: false,
   }),
-  cookie: { maxAge: calculateTtl(15), secure: false },
+  cookie: {
+    maxAge: calculatePeriod({ days: 15, units: "seconds" }),
+    secure: false,
+  },
 });
+server.register(fastifyPostgresJs, databaseConfig);
 
 server.register(helmet);
 server.register(formBody);
@@ -47,11 +59,16 @@ server.addHook("onRequest", async (req: FastifyRequest, res: FastifyReply) => {
   if (session.authenticated) {
     const currentTime = new Date().getTime();
     const lastLoginTime = session.lastLoginTime || currentTime;
-    const fifteenDaysInMilliseconds = calculateTtl(15); // 15 days in milliseconds
+    const fifteenDaysInMilliseconds = calculatePeriod({
+      days: 15,
+      units: "milliseconds",
+    }); // 15 days in milliseconds
     if (currentTime - lastLoginTime > fifteenDaysInMilliseconds) {
       // User's session has expired, log them out
       session.authenticated = false;
       session.lastLoginTime = undefined;
+      session.githubToken = undefined;
+      session.userData = undefined;
     } else {
       // Update last login time
       session.lastLoginTime = currentTime;
@@ -83,20 +100,23 @@ const oauthReqSchema = {
 
 server.get("/oauth", oauthReqSchema, async (req, res) => {
   const query = req.query as { code: string };
-  const session = req.session as SessionData;
   const { code } = query;
+
+  const session = req.session as SessionData;
   session.authenticated = true;
   session.lastLoginTime = new Date().getTime();
   session.githubToken = await getGithubToken(code);
 
-  const a = await getGithubUserData(session.githubToken?.access_token || "");
-  console.log(a);
+  const userData = await getGithubUserData(
+    session.githubToken?.access_token || ""
+  );
 
+  const doesUserExist = await checkUserInDb({ req, user: userData });
+
+  console.log("doesUserExist!!!!:", doesUserExist);
+
+  session.userData = userData;
   return { message: session.githubToken, session };
-});
-
-server.get("/api/healthcheck", async () => {
-  return { message: "ok" };
 });
 
 export { server };
