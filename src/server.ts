@@ -13,7 +13,7 @@ import {
   getGithubUserData,
   getGithubToken,
   calculatePeriod,
-  checkUserInDb,
+  handleUserData,
   type GithubTokenData,
   type GithubUser,
 } from "./utils";
@@ -40,9 +40,10 @@ server.register(fastifySession, {
     readable: false,
   }),
   cookie: {
-    maxAge: calculatePeriod({ days: 15, units: "seconds" }),
+    maxAge: calculatePeriod({ days: 15, units: "milliseconds" }),
     secure: false,
   },
+  cookieName: "session",
 });
 server.register(fastifyPostgresJs, databaseConfig);
 
@@ -64,7 +65,7 @@ server.addHook("onRequest", async (req: FastifyRequest, res: FastifyReply) => {
       units: "milliseconds",
     }); // 15 days in milliseconds
     if (currentTime - lastLoginTime > fifteenDaysInMilliseconds) {
-      // User's session has expired, log them out
+      // User's session has expired, log him out
       session.authenticated = false;
       session.lastLoginTime = undefined;
       session.githubToken = undefined;
@@ -73,14 +74,28 @@ server.addHook("onRequest", async (req: FastifyRequest, res: FastifyReply) => {
       // Update last login time
       session.lastLoginTime = currentTime;
     }
+
+    //check access token validation
+    if (session.githubToken) {
+      const tokenIsValid: GithubUser | null = await getGithubUserData(
+        "session.githubToken.access_token"
+      );
+      console.log("tokenIsValid:", tokenIsValid);
+      if (!tokenIsValid) {
+        session.githubToken = await getGithubToken({
+          refreshToken: session.githubToken.refresh_token,
+        });
+      }
+    }
   }
 });
 
 server.get("/", async (req, res) => {
   const session = req.session as SessionData;
-  return session.authenticated
-    ? res.html`Hello Man`
-    : res.html`<a href="http://localhost:3000/authorize">Login with GitHub</a>`;
+  if (session.authenticated && session.userData) {
+    return res.html`<h1>Hello ${session.userData.login}</h1>`;
+  }
+  return res.html`<a href="http://localhost:3000/authorize">Login with GitHub</a>`;
 });
 
 server.get("/authorize", async (req, res) => {
@@ -105,18 +120,20 @@ server.get("/oauth", oauthReqSchema, async (req, res) => {
   const session = req.session as SessionData;
   session.authenticated = true;
   session.lastLoginTime = new Date().getTime();
-  session.githubToken = await getGithubToken(code);
+  session.githubToken = await getGithubToken({ code });
 
   const userData = await getGithubUserData(
     session.githubToken?.access_token || ""
   );
-
-  const doesUserExist = await checkUserInDb({ req, user: userData });
-
-  console.log("doesUserExist!!!!:", doesUserExist);
-
   session.userData = userData;
-  return { message: session.githubToken, session };
+  const userHandling = await handleUserData({ req, userData });
+
+  return userHandling
+    ? res.redirect("/")
+    : res.html`<h1>Something went wrong</h1>`;
 });
+
+//   return { message: session.githubToken, session };
+// });
 
 export { server };

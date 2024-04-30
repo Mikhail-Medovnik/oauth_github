@@ -11,19 +11,33 @@ export interface GithubTokenData {
   scope: "";
 }
 
-export async function getGithubToken(
-  code: string
-): Promise<GithubTokenData | null> {
+interface GetGithubTokenArgs {
+  code?: string;
+  refreshToken?: string;
+}
+
+export async function getGithubToken({
+  code,
+  refreshToken,
+}: GetGithubTokenArgs): Promise<GithubTokenData | null> {
   try {
-    const postData = {
+    const accessTokenRequest = {
       client_id: env.CLIENT_ID,
       client_secret: env.CLIENT_SECRET,
       code,
     };
+
+    const refreshTokenRequest = {
+      client_id: env.CLIENT_ID,
+      client_secret: env.CLIENT_SECRET,
+      grant_type: "refresh_token",
+      refresh_token: refreshToken,
+    };
+
     const postHeaders = { headers: { accept: "application/json" } };
     const response: AxiosResponse<GithubTokenData> = await axios.post(
       env.GITHUB_TOKEN_LINK,
-      postData,
+      accessTokenRequest.code ? accessTokenRequest : refreshTokenRequest,
       postHeaders
     );
     return response.data;

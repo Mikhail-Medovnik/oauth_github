@@ -23,22 +23,20 @@ const dbUserSchema: DbUserSchema = {
   first_login_date: "",
 };
 
-const b = 1123;
-
 export async function checkUserInDb({
   req,
   user,
-}: CheckUserInDbArgs): Promise<boolean | string | unknown> {
+}: CheckUserInDbArgs): Promise<false | GithubUser> {
   if (!user) {
-    console.log("User is not provided");
-    return "User is not provided";
+    console.log("User not provided");
+    return false;
   }
 
-  const a: any = await req.server.sql`
+  const githubAccount: GithubUser[] = await req.server.sql`
   SELECT * 
   FROM oauth_users 
-  WHERE github_id=${b}
+  WHERE github_id=${dbUserSchema.github_id}
   `;
 
-  return a;
+  return githubAccount.length > 0 ? githubAccount[0] : false;
 }
