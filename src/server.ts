@@ -78,9 +78,8 @@ server.addHook("onRequest", async (req: FastifyRequest, res: FastifyReply) => {
     //check access token validation
     if (session.githubToken) {
       const tokenIsValid: GithubUser | null = await getGithubUserData(
-        "session.githubToken.access_token"
+        session.githubToken.access_token
       );
-      console.log("tokenIsValid:", tokenIsValid);
       if (!tokenIsValid) {
         session.githubToken = await getGithubToken({
           refreshToken: session.githubToken.refresh_token,
