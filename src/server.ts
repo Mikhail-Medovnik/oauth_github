@@ -32,19 +32,23 @@ const server = fastify({
   ignoreTrailingSlash: true,
 });
 
+const cookieSecret = randomstring.generate({
+  length: 32,
+  charset: "alphabetic",
+  readable: false,
+});
+
 server.register(fastifyCookie);
 server.register(fastifySession, {
-  secret: randomstring.generate({
-    length: 32,
-    charset: "alphabetic",
-    readable: false,
-  }),
+  secret: cookieSecret,
   cookie: {
-    maxAge: calculatePeriod({ days: 15, units: "milliseconds" }),
     secure: false,
+    maxAge: calculatePeriod({ days: 15, units: "milliseconds" }),
   },
-  cookieName: "session",
+  cookieName: "oauth",
+  saveUninitialized: false,
 });
+
 server.register(fastifyPostgresJs, databaseConfig);
 
 server.register(helmet);
@@ -56,6 +60,7 @@ if (env.CORS !== "") {
 }
 
 server.addHook("onRequest", async (req: FastifyRequest, res: FastifyReply) => {
+  console.log("ON_REQ");
   const session: SessionData = req.session as SessionData;
   if (session.authenticated) {
     const currentTime = new Date().getTime();
@@ -91,6 +96,7 @@ server.addHook("onRequest", async (req: FastifyRequest, res: FastifyReply) => {
 
 server.get("/", async (req, res) => {
   const session = req.session as SessionData;
+  console.log("MAIN ROUTE", session);
   if (session.authenticated && session.userData) {
     return res.html`<h1>Hello ${session.userData.login}</h1>`;
   }
@@ -115,24 +121,20 @@ const oauthReqSchema = {
 server.get("/oauth", oauthReqSchema, async (req, res) => {
   const query = req.query as { code: string };
   const { code } = query;
-
+  const githubToken = await getGithubToken({ code });
+  const userData = await getGithubUserData(githubToken?.access_token || "");
   const session = req.session as SessionData;
+
   session.authenticated = true;
   session.lastLoginTime = new Date().getTime();
-  session.githubToken = await getGithubToken({ code });
-
-  const userData = await getGithubUserData(
-    session.githubToken?.access_token || ""
-  );
+  session.githubToken = githubToken;
   session.userData = userData;
+
   const userHandling = await handleUserData({ req, userData });
 
   return userHandling
     ? res.redirect("/")
     : res.html`<h1>Something went wrong</h1>`;
 });
-
-//   return { message: session.githubToken, session };
-// });
 
 export { server };
